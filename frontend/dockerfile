@@ -1,0 +1,37 @@
+# Etapa 1: Build
+FROM node:lts-alpine AS build
+WORKDIR /app
+
+# Copiar package files
+COPY package*.json ./
+RUN npm ci --only=production=false
+
+# Copiar todo el código
+COPY . .
+
+# Construir la aplicación (Vite)
+RUN npm run build
+
+# Etapa 2: Servir con Caddy (más ligero y recomendado por Railway)
+FROM caddy:2-alpine
+
+# Copiar los archivos generados por Vite
+COPY --from=build /app/dist /usr/share/caddy
+
+# Configuración básica de Caddy para SPA (React Router, etc.)
+COPY <<EOF /etc/caddy/Caddyfile
+{
+    admin off
+    auto_https off
+}
+
+:80 {
+    root * /usr/share/caddy
+    encode gzip
+    file_server
+    try_files {path} /index.html
+}
+EOF
+
+EXPOSE 80
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
